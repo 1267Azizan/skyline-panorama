@@ -1,0 +1,94 @@
+# Example line configuration.
+#
+# Each line is cut out of the source video between t0 and t1 seconds and decimated to
+# `fps` frames per second (>= 3). A line with `join:` is built by concatenating the
+# listed parts instead of stitching (use it for two sweeps of the same facade that do
+# NOT overlap — they cannot be stitched, only placed side by side).
+
+source_fps_hint: 60
+
+lines:
+  # longest sweeps first is fine — the pipeline balances by duration anyway
+  - name: LINE2
+    t0: 53
+    t1: 160
+    fps: 3
+
+  - name: LINE3
+    t0: 164
+    t1: 214
+    fps: 6
+
+  - name: LINE4
+    t0: 219
+    t1: 269
+    fps: 3
+
+  - name: LINE5
+    t0: 272
+    t1: 315
+    fps: 3
+
+  - name: LINE6
+    t0: 318
+    t1: 360
+    fps: 3
+
+  - name: LINE7
+    t0: 363
+    t1: 404
+    fps: 3
+
+  - name: LINE8
+    t0: 409
+    t1: 453
+    fps: 6
+
+  - name: LINE9
+    t0: 457
+    t1: 555
+    fps: 3
+
+  - name: LINE10
+    t0: 578
+    t1: 581
+    fps: 10
+
+  - name: LINE11
+    t0: 587
+    t1: 595
+    fps: 10
+
+  - name: LINE12
+    t0: 599
+    t1: 618
+    fps: 6
+
+  - name: LINE13
+    t0: 622
+    t1: 643
+    fps: 3
+
+  - name: LINE14
+    t0: 652
+    t1: 704
+    fps: 3
+
+  - name: LINE15
+    t0: 708
+    t1: 762
+    fps: 3
+
+  # LINE1 = two non-overlapping sweeps of the same facade, concatenated
+  - name: LINE1
+    join: [LINE1a, LINE1b]
+
+  - name: LINE1a
+    t0: 0
+    t1: 51
+    fps: 6
+
+  - name: LINE1b
+    t0: 557
+    t1: 573
+    fps: 6

@@ -1,0 +1,23 @@
+# secrets / local
+_dt_keys.json
+.env
+
+# pipeline artifacts
+output/
+state.json
+*_segments/
+*.p0*
+*.part.mp4
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/

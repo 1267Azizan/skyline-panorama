@@ -1,0 +1,4 @@
+numpy>=1.23
+opencv-python-headless>=4.7
+daytona>=0.20
+PyYAML>=6.0
