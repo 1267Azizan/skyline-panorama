@@ -3,19 +3,18 @@
 Flow
 ----
 1. load config, decide which lines still need work (resume)
-2. bring up the Daytona pool (one sandbox per account)
+2. bring up the sandbox pool (one sandbox per configured account)
 3. push the stitcher + deps to every sandbox
-4. per sandbox, in parallel: extract its segments locally, upload them
+4. per sandbox, in parallel: cut its segments and upload them
 5. launch each sandbox's lines sequentially (a 4K canvas is memory-heavy) and poll
 6. download every deliverable, run the QC gates, mark PASS/PARTIAL
 7. join concatenated lines (e.g. LINE1a+LINE1b -> LINE1)
 8. write the config/QC report, contact sheet and README
-9. delete every sandbox it created
+9. release every sandbox it created
 """
 import os
 import json
 import time
-import shutil
 import threading
 
 from . import config as config_mod
@@ -24,7 +23,7 @@ from . import qc as qc_mod
 from . import join as join_mod
 from . import report as report_mod
 from .segment import Segmenter
-from .daytona import Pool
+from .remote import Pool
 
 STATE_FILE = "state.json"
 STITCHER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stitcher.py")
@@ -36,7 +35,7 @@ def _log(*a):
 
 class Pipeline:
     def __init__(self, src, cfg, out_dir, stage_dir=None, par=3, keep=False,
-                 width=3840, height=2160, dry_run=False):
+                 width=3840, height=2160, dry_run=False, sandbox_config=None):
         self.src = src
         self.cfg = cfg
         self.out = out_dir
@@ -46,10 +45,12 @@ class Pipeline:
         self.width = width
         self.height = height
         self.dry_run = dry_run
+        self.sandbox_config = sandbox_config
         self.seg = Segmenter(src, self.stage, width=width, height=height)
         self.state_path = os.path.join(out_dir, STATE_FILE)
         self.state = {}
         self.qc_by_line = {}
+        self._home = "/home/user"
 
     # ---------- state ----------
     def load_state(self):
@@ -88,8 +89,9 @@ class Pipeline:
             return self.state
 
         if todo:
-            pool = Pool(max_accounts=self.par, log=_log)
+            pool = Pool(config_path=self.sandbox_config, max_accounts=self.par, log=_log)
             units = pool.up()
+            self._home = getattr(units[0], "home", self._home) if units else self._home
             try:
                 self._prepare(units)
                 self._stage_and_run(units, todo)
@@ -140,7 +142,7 @@ class Pipeline:
                 want = str(os.path.getsize(seg))
                 ok = False
                 for att in range(4):
-                    if transfer.remote_size(u.sb, f"{line.name}_seg.mp4") == want:
+                    if transfer.remote_size(u.sb, f"{line.name}_seg.mp4", home=u.home) == want:
                         ok = True
                         break
                     ok, mbs = u.upload(seg, f"{line.name}_seg.mp4", part_mb=8, workers=8)
@@ -172,13 +174,13 @@ class Pipeline:
         script = []
         for line in lines:
             script.append(
-                f"echo '### {line.name} start'; cd /home/daytona && "
+                f"echo '### {line.name} start'; cd {self._home} && "
                 f"OS_DY=on OS_NOFPS=on OS_TMP=_t_{line.name} OS_SLAB=2048 "
                 f"python3 stitcher.py {line.name}_seg.mp4 0 {round(line.duration, 3)} "
                 f"{line.name}.png {self.width} {line.fps:g} 0 1 _t_{line.name} "
-                f">> _worker.log 2>&1; rm -rf /home/daytona/_t_{line.name}; "
+                f">> _worker.log 2>&1; rm -rf {self._home}/_t_{line.name}; "
                 f"echo '### {line.name} done'")
-        cmd = ("cd /home/daytona && nohup bash -c " + json.dumps(" ; ".join(script)) +
+        cmd = (f"cd {self._home} && nohup bash -c " + json.dumps(" ; ".join(script)) +
                " > _seq.log 2>&1 & sleep 3; pgrep -c -f stitcher.py")
         r = u.exec(cmd, timeout=180)
         u.launched = True
@@ -194,7 +196,7 @@ class Pipeline:
                     continue
                 try:
                     r = u.exec(
-                        "cd /home/daytona && ls -la *.png 2>/dev/null | awk '{print $5,$9}'; "
+                        f"cd {self._home} && ls -la *.png 2>/dev/null | awk '{{print $5,$9}}'; "
                         "echo '@@RUN'; pgrep -c -f stitcher.py || echo 0", timeout=180)
                     body = r.result or ""
                     try:

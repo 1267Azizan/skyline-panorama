@@ -1,8 +1,8 @@
-"""segment.py — cut each line out of the source video, locally, at its FINAL fps.
+"""segment.py — cut each line out of the source video, at its FINAL fps.
 
-Why this exists: the source is a 4K60 file. Uploading it whole (or even per line at 60 fps)
-is the real bottleneck, and the uplink is only ~1.3 MB/s. Decimating to the final fps
-*before* upload shrinks a segment to roughly 1/20 of the source bitrate, so uploads are
+Why this exists: the source is a high-bitrate 4K file. Uploading it whole (or even per
+line at its native frame rate) is the real bottleneck. Decimating to the final fps
+*before* upload shrinks a segment to roughly 1/20 of the source bitrate, so transfers are
 small and the sandbox does no decimation (it stitches the exact frame set we chose).
 
 Extraction is SERIALISED by a lock: three concurrent 4K x264 encodes exhaust local RAM

@@ -1,27 +1,27 @@
-"""transfer.py — robust chunked upload/download for Daytona sandboxes.
+"""transfer.py — robust chunked upload/download for hosted sandboxes.
 
-The SDK's single-shot ``upload_file`` times out on files above ~100 MB, and both upload
-and download can hang indefinitely with no timeout. So: split large files into parts,
-upload them with a thread pool (the local uplink is shared, so N concurrent streams reach
-the real link speed), ``cat`` them back together inside the sandbox and verify the size;
-every attempt is bounded by a daemon thread so a hang is abandoned and retried.
+A single-shot upload times out on files above ~100 MB, and both upload and download can
+hang with no timeout. So: split large files into parts, upload them with a thread pool
+(the uplink is shared, so N concurrent streams reach the real link speed), reassemble
+them inside the sandbox and verify the size; every attempt is bounded by a daemon thread
+so a hang is abandoned and retried.
 """
 import os
 import time
 import threading
 import queue
 
-REMOTE_HOME = "/home/daytona"
+REMOTE_HOME = "/home/user"  # sandbox home dir; overridden by the provider config
 
 
-def _direct(sb, local, remote, tries=5, timeout=180):
+def _direct(sb, local, remote, tries=5, timeout=180, home=REMOTE_HOME):
     """One file, retried; each attempt bounded by a thread (the SDK can hang)."""
     for a in range(tries):
         box = {}
 
         def do():
             try:
-                sb.fs.upload_file(local, f"{REMOTE_HOME}/{remote}")
+                sb.fs.upload_file(local, f"{home}/{remote}")
                 box["ok"] = True
             except Exception as e:  # noqa: BLE001 - report any SDK failure
                 box["err"] = e
@@ -37,18 +37,18 @@ def _direct(sb, local, remote, tries=5, timeout=180):
     return False
 
 
-def remote_size(sb, remote):
-    r = sb.process.exec(f"stat -c%s {REMOTE_HOME}/{remote} 2>/dev/null", timeout=120)
+def remote_size(sb, remote, home=REMOTE_HOME):
+    r = sb.process.exec(f"stat -c%s {home}/{remote} 2>/dev/null", timeout=120)
     return (r.result or "").strip()
 
 
-def upload(sb, local, remote, part_mb=8, workers=8, tries=5, verify=True):
+def upload(sb, local, remote, part_mb=8, workers=8, tries=5, verify=True, home=REMOTE_HOME):
     """Upload ``local`` to the sandbox. Returns (ok, MB/s)."""
     size = os.path.getsize(local)
     lim = part_mb * 1024 * 1024
     t0 = time.time()
     if size <= lim:
-        ok = _direct(sb, local, remote, tries)
+        ok = _direct(sb, local, remote, tries, home=home)
         return ok, size / 1e6 / max(1e-3, time.time() - t0)
 
     parts = []
@@ -76,7 +76,7 @@ def upload(sb, local, remote, part_mb=8, workers=8, tries=5, verify=True):
                 p, r = q.get_nowait()
             except queue.Empty:
                 return
-            ok = _direct(sb, p, r, tries)
+            ok = _direct(sb, p, r, tries, home=home)
             with lock:
                 results[r] = ok
 
@@ -89,7 +89,7 @@ def upload(sb, local, remote, part_mb=8, workers=8, tries=5, verify=True):
     ok = all(results.values())
     if ok:
         r = sb.process.exec(
-            f"cd {REMOTE_HOME} && cat {remote}.p* > {remote} && rm -f {remote}.p* && "
+            f"cd {home} && cat {remote}.p* > {remote} && rm -f {remote}.p* && "
             f"stat -c%s {remote}", timeout=900)
         got = (r.result or "").strip().splitlines()[-1] if r.result else "?"
         if verify:
@@ -105,14 +105,14 @@ def upload(sb, local, remote, part_mb=8, workers=8, tries=5, verify=True):
     return ok, size / 1e6 / max(1e-3, time.time() - t0)
 
 
-def download(sb, remote, local, tries=5, timeout=300):
+def download(sb, remote, local, tries=5, timeout=300, home=REMOTE_HOME):
     """Download one file; each attempt bounded by a thread (the SDK can hang)."""
     for a in range(tries):
         box = {}
 
         def do():
             try:
-                data = sb.fs.download_file(f"{REMOTE_HOME}/{remote}")
+                data = sb.fs.download_file(f"{home}/{remote}")
                 if data:
                     box["data"] = data
             except Exception as e:  # noqa: BLE001

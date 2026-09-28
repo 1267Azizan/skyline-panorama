@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy this to sandbox.json (which is git-ignored) and fill in your provider. Nothing provider-specific is baked into the code.",
+  "sdk": "your_provider_sdk",
+  "client_class": "Client",
+  "params_class": "CreateSandboxParams",
+  "key_env": "SKYLINE_SANDBOX_KEY",
+  "snapshot": "your-snapshot-name",
+  "auto_stop_interval": 0,
+  "remote_home": "/home/user",
+  "api_base": "https://api.your-provider.example",
+  "keys": []
+}

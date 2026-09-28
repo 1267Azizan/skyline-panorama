@@ -26,7 +26,7 @@ def main():
     ap.add_argument("--owner", default=None, help=f"default: the logged-in user ({OWNER_HINT})")
     ap.add_argument("--private", action="store_true", help="create a private repo")
     ap.add_argument("--description", default="Automated perspective panorama pipeline "
-                    "(local decimation + Daytona stitching + elevation normalisation)")
+                    "(local decimation + sandbox stitching + elevation normalisation)")
     args = ap.parse_args()
 
     # 1. auth check
